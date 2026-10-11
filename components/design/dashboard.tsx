@@ -3,6 +3,7 @@
 import { ArrowRight, BookOpen, BrainCircuit, Flame, Play, Sparkles, Target, TrendingUp } from "lucide-react";
 
 export type ActivityItem = {
+  id: string;
   title: string;
   detail: string;
   when: string;
@@ -33,7 +34,7 @@ export function LiveDashboard({
   continueNote: string;
   metrics: { label: string; value: string; detail: string; accent: "coral" | "blue" | "mint" | "violet" }[];
   activity: ActivityItem[];
-  week: { label: string; total: number }[];
+  week: { key: string; label: string; total: number }[];
   weakTopic: string | null;
   onReviewWeak: () => void;
   onProgress: () => void;
@@ -105,7 +106,7 @@ export function LiveDashboard({
           </div>
           {activity.length === 0 && <p className="py-6 text-sm text-[#91a0b4]">Finish a quiz or flashcard session to see it here.</p>}
           {activity.map((item) => (
-            <div key={`${item.title}:${item.when}`} className="flex items-center gap-3 border-b border-[#243348] py-4">
+            <div key={item.id} className="flex items-center gap-3 border-b border-[#243348] py-4">
               <div className="flex size-10 items-center justify-center rounded-xl bg-[#f15b66]/10 text-[#fa7982]"><Target size={17} /></div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-medium text-[#e3e9f1]">{item.title}</p>
@@ -121,7 +122,7 @@ export function LiveDashboard({
             <p className="mt-1 text-xs text-[#8190a4]">Questions answered, last 7 days</p>
             <div className="mt-6 flex h-[96px] items-end justify-between gap-2">
               {week.map((day) => (
-                <div key={day.label} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
+                <div key={day.key} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
                   <div className="w-full max-w-[24px] rounded-t-[4px] bg-[#31435a]" style={{ height: `${Math.max(8, Math.round((day.total / peak) * 100))}%` }} />
                   <span className="text-[10px] text-[#718198]">{day.label}</span>
                 </div>

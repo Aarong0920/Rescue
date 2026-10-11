@@ -1437,14 +1437,17 @@ export default function Rescue() {
       })
       .reduce((sum, attempt) => sum + attempt.total, 0);
     return {
+      key,
       label: day.toLocaleDateString(undefined, { weekday: "narrow" }),
       total,
     };
   });
+  const weekPeak = Math.max(1, ...week.map((day) => day.total));
   const recentActivity = [...progress.attempts]
     .reverse()
     .slice(0, 4)
     .map((attempt) => ({
+      id: attempt.id,
       title: attempt.resourceTitle || attempt.topic || "Quiz",
       detail: `${attempt.correct} of ${attempt.total} correct`,
       when: new Date(attempt.date).toLocaleDateString(undefined, {
@@ -1728,7 +1731,7 @@ export default function Rescue() {
                       <Search size={18} />
                       <input
                         aria-label="Search resources"
-                        placeholder="Search your resources…"
+                        placeholder="Search chapters, subjects..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                       />
@@ -1752,60 +1755,69 @@ export default function Rescue() {
                             .includes(search.toLowerCase()),
                       )
                       .map((r) => (
-                        <button
-                          className="resource-card"
-                          key={r.id}
-                          onClick={() => openResource(r)}
-                        >
-                          <div className="resource-top">
+                        <article className="resource-card" key={r.id}>
+                          <button
+                            className="resource-open"
+                            onClick={() => openResource(r)}
+                          >
                             <span className="topic-icon">
-                              <FileText />
+                              <FileText size={18} />
                             </span>
-                            <span className="badge">
-                              {r.visibility === "private" ? (
-                                <LockKeyhole size={12} />
-                              ) : (
-                                <ShieldCheck size={12} />
-                              )}{" "}
-                              {r.visibility === "private"
-                                ? "Private"
-                                : "Approved"}
+                            <span className="resource-copy">
+                              <span className="resource-title-row">
+                                <h3>{r.title}</h3>
+                                <span className={`stage stage-${(r.stage || r.processing || (r.pages ? "ready" : "saved")).replace(/\s/g, "")}`}>
+                                  {chapterStage(r)}
+                                </span>
+                              </span>
+                              <p>
+                                {r.topic}
+                                {r.pages ? ` · ${r.pages} pages` : ""}
+                                {r.visibility === "private" ? " · Private" : " · Approved"}
+                              </p>
+                              {(r.processing === "processing" || r.processing === "uploaded") &&
+                                chapterWork(r) && (
+                                <div
+                                  className="work-meter"
+                                  aria-label={`${chapterWork(r)!.done} of ${chapterWork(r)!.total} pages complete`}
+                                >
+                                  <span
+                                    style={{
+                                      width: `${(chapterWork(r)!.done / chapterWork(r)!.total) * 100}%`,
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              {r.processing === "failed" && (
+                                <p>{r.processingError || "Processing failed. Open the chapter to retry."}</p>
+                              )}
                             </span>
-                          </div>
-                          <span className="eyebrow">{r.topic}</span>
-                          <h3>{r.title}</h3>
-                          <p>
-                            {r.processing === "failed"
-                              ? r.processingError || "Processing failed. Open the chapter to retry."
-                              : (r.processing === "processing" || r.processing === "uploaded") &&
-                                  chapterWork(r)
-                                ? `${chapterWork(r)!.done} of ${chapterWork(r)!.total} pages complete`
-                                : r.pages
-                                  ? `Private chapter · ${r.pages} pages`
-                                  : r.content.slice(0, 120) ||
-                                    "Private file · add text notes for AI study"}
-                          </p>
-                          {(r.processing === "processing" || r.processing === "uploaded") &&
-                            chapterWork(r) && (
-                            <div
-                              className="work-meter"
-                              aria-label={`${chapterWork(r)!.done} of ${chapterWork(r)!.total} pages complete`}
+                          </button>
+                          <div className="resource-actions">
+                            <button type="button" onClick={() => openResource(r)}>Study</button>
+                            <button
+                              type="button"
+                              disabled={busy || (r.content.length < 20 && !(r.pages ?? 0))}
+                              onClick={() => openStudy(r.id, "Practice quizzes")}
                             >
-                              <span
-                                style={{
-                                  width: `${(chapterWork(r)!.done / chapterWork(r)!.total) * 100}%`,
-                                }}
-                              />
-                            </div>
-                          )}
-                          <div className="resource-footer">
-                            <span className={`stage stage-${(r.stage || r.processing || (r.pages ? "ready" : "saved")).replace(/\s/g, "")}`}>
-                              {chapterStage(r)}
-                              {quizLine(r) ? ` · ${quizLine(r)}` : ""}
-                            </span>
-                            <ArrowRight size={18} />
+                              Quiz
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy || (r.content.length < 20 && !(r.pages ?? 0))}
+                              onClick={() => openStudy(r.id, "Flashcards")}
+                            >
+                              Cards
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy || (r.content.length < 20 && !(r.pages ?? 0))}
+                              onClick={() => openStudy(r.id, "AI tutor")}
+                            >
+                              Ask
+                            </button>
                           </div>
-                        </button>
+                        </article>
                       ))}
                   </div>
                   {!resources.some(
@@ -1846,6 +1858,25 @@ export default function Rescue() {
                         : "Challenge what you know. Learn from every answer."
                     }
                   />
+                  {page === "Practice quizzes" && weakest && (
+                    <section className="quiz-recommend">
+                      <div>
+                        <span className="eyebrow">Recommended for you</span>
+                        <h2>{weakest}</h2>
+                        <p>
+                          Your scores are lowest in this topic. A focused quiz
+                          still comes from your uploaded material.
+                        </p>
+                      </div>
+                      <button
+                        className="button primary"
+                        type="button"
+                        onClick={() => setQuizTopic(weakest)}
+                      >
+                        Use this topic
+                      </button>
+                    </section>
+                  )}
                   <div className="study-toolbar">
                     {setSelector()}
                     {resourceSelector()}
@@ -2132,6 +2163,16 @@ export default function Rescue() {
                           Next
                           <ChevronRight size={17} />
                         </button>
+                      </div>
+                      <div
+                        className="card-meter"
+                        aria-label={`Card ${cardIndex + 1} of ${current.cards.length}`}
+                      >
+                        <span
+                          style={{
+                            width: `${current.cards.length ? ((cardIndex + 1) / current.cards.length) * 100 : 0}%`,
+                          }}
+                        />
                       </div>
                     </section>
                   ) : (
@@ -2432,6 +2473,22 @@ export default function Rescue() {
                       detail="Days with a quiz attempt"
                     />
                   </div>
+                  <section className="panel week-panel">
+                    <h2>This week</h2>
+                    <p className="muted">Questions answered, last 7 days</p>
+                    <div className="week-bars">
+                      {week.map((day) => (
+                        <div className="week-bar" key={day.key}>
+                          <span
+                            style={{
+                              height: `${Math.max(8, Math.round((day.total / weekPeak) * 100))}%`,
+                            }}
+                          />
+                          <small>{day.label}</small>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                   <div className="dashboard-grid">
                     <section className="panel">
                       <h2>Topic performance</h2>
@@ -2535,7 +2592,30 @@ export default function Rescue() {
                           : "Your name is visible only on your account. Private chapters stay private."
                     }
                   />
-                  <section className="panel">
+                  <section className="panel settings-panel">
+                    <div className="settings-identity">
+                      <span className="avatar">{initials(profile)}</span>
+                      <div>
+                        <strong>
+                          {[profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Your account"}
+                        </strong>
+                        <small>{demo ? "Explore RESCUE" : accountEmail || "EMT student"}</small>
+                      </div>
+                    </div>
+                    <div className="settings-counts">
+                      <div>
+                        <strong>{progress.attempts.length}</strong>
+                        <span>Quizzes</span>
+                      </div>
+                      <div>
+                        <strong>{progress.mastered.length}</strong>
+                        <span>Cards known</span>
+                      </div>
+                      <div>
+                        <strong>{studyDays}</strong>
+                        <span>Study days</span>
+                      </div>
+                    </div>
                     <form
                       key={`${profile.firstName}:${profile.lastName}`}
                       className="stack-form"
