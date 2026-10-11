@@ -681,6 +681,25 @@ export default function Rescue() {
     pushPlace(next, null);
     if (next === "Admin") void loadAdmin();
   }
+  function openStudy(id: string, next: "Flashcards" | "Practice quizzes" | "AI tutor") {
+    const match = progress.sets.find(
+      (set) =>
+        set.resourceId === id &&
+        (next === "Flashcards"
+          ? set.cards.length > 0
+          : next === "Practice quizzes"
+            ? set.questions.length > 0
+            : true),
+    );
+    if (match) setSelected(match.id);
+    setResourceId(id);
+    setCardIndex(0);
+    setFlipped(false);
+    setAnswers([]);
+    setSubmitted(false);
+    setFeedback({});
+    go(next);
+  }
   function openResource(resource: Resource) {
     setDetail(resource);
     setShare(false);
@@ -741,6 +760,14 @@ export default function Rescue() {
       scope: origin === "auto" || mode !== "quiz" ? "material" : quizScope,
       difficulty: origin === "auto" ? "intermediate" : quizLevel,
       topic: quizTopic.trim() || undefined,
+      avoid:
+        origin === "auto" || mode !== "quiz"
+          ? undefined
+          : progressRef.current.sets
+              .filter((set) => set.resourceId === id)
+              .flatMap((set) => set.questions.map((item) => item.question.trim().slice(0, 180)))
+              .filter(Boolean)
+              .slice(0, 12),
       ...bounds,
     });
     if (result.duplicate || result.skipped) {
@@ -1402,6 +1429,22 @@ export default function Rescue() {
       </label>
     );
   }
+  function materialLinks(id: string) {
+    if (!id) return null;
+    return (
+      <div className="study-links">
+        <button type="button" onClick={() => openStudy(id, "Flashcards")}>
+          Flashcards
+        </button>
+        <button type="button" onClick={() => openStudy(id, "Practice quizzes")}>
+          Quiz
+        </button>
+        <button type="button" onClick={() => openStudy(id, "AI tutor")}>
+          Ask RESCUE
+        </button>
+      </div>
+    );
+  }
   function setSelector() {
     return (
       <label className="field">
@@ -2022,7 +2065,7 @@ export default function Rescue() {
                       }
                       text={
                         page === "My library"
-                          ? "Add text notes, a PDF, or a Markdown file."
+                          ? "Add notes, a chapter PDF, or photos. Open the item to make a quiz, flashcards, or ask RESCUE about it. Do not upload patient information."
                           : "Ask your administrator to add you to a class. Submit original notes from your private library for review."
                       }
                     />
@@ -2208,8 +2251,15 @@ export default function Rescue() {
                         <span>{current.title}</span>
                         <span>
                           {cardIndex + 1} / {current.cards.length}
+                          {shownCard &&
+                          (progress.cardMisses?.[
+                            cardKey(current.id, shownCard, shownIndex)
+                          ] ?? 0) > 0
+                            ? " · Needs practice"
+                            : ""}
                         </span>
                       </div>
+                      {materialLinks(current.resourceId)}
                       <button
                         className={`flashcard ${flipped ? "flipped" : ""}`}
                         onClick={() => setFlipped(!flipped)}
@@ -2256,7 +2306,8 @@ export default function Rescue() {
                             void run(async () => {
                               if (!shownCard) return;
                               const key = cardKey(current.id, shownCard, shownIndex);
-                              const misses = progress.cardMisses ?? {};
+                              const misses = { ...(progress.cardMisses ?? {}) };
+                              misses[key] = (misses[key] ?? 0) + 1;
                               await persist(
                                 recordSession(
                                   {
@@ -2264,10 +2315,7 @@ export default function Rescue() {
                                     mastered: progress.mastered.filter(
                                       (item) => item !== key,
                                     ),
-                                    cardMisses: {
-                                      ...misses,
-                                      [key]: (misses[key] ?? 0) + 1,
-                                    },
+                                    cardMisses: misses,
                                   },
                                   { kind: "cards", topic: current.topic },
                                 ),
@@ -2278,7 +2326,7 @@ export default function Rescue() {
                             })
                           }
                         >
-                          Study again
+                          Needs practice
                         </button>
                         <button
                           className="button primary"
@@ -2287,6 +2335,8 @@ export default function Rescue() {
                             void run(async () => {
                               if (!shownCard) return;
                               const key = cardKey(current.id, shownCard, shownIndex);
+                              const misses = { ...(progress.cardMisses ?? {}) };
+                              delete misses[key];
                               await persist(
                                 recordSession(
                                   {
@@ -2294,6 +2344,7 @@ export default function Rescue() {
                                     mastered: progress.mastered.includes(key)
                                       ? progress.mastered
                                       : [...progress.mastered, key],
+                                    cardMisses: misses,
                                   },
                                   { kind: "cards", topic: current.topic },
                                 ),
@@ -2305,12 +2356,7 @@ export default function Rescue() {
                           }
                         >
                           <Check size={18} />
-                          {shownCard &&
-                          progress.mastered.includes(
-                            cardKey(current.id, shownCard, shownIndex),
-                          )
-                            ? "Know it"
-                            : "Know it"}
+                          Known
                         </button>
                         <button
                           className="button secondary"
@@ -2327,6 +2373,7 @@ export default function Rescue() {
                     </section>
                   ) : (
                     <section className="quiz-section">
+                      {materialLinks(current.resourceId)}
                       {quizMode === "exam" && remaining !== null && !submitted && (
                         <p className="badge">
                           Time left {Math.floor(remaining / 60)}:
@@ -2434,6 +2481,9 @@ export default function Rescue() {
                           </div>
                           {(submitted || (quizMode === "practice" && (feedback[i] || answers[i] !== undefined && q.answer !== undefined))) && (
                             <div className="explanation">
+                              <p>
+                                <strong>Why this answer</strong>
+                              </p>
                               <p>{feedback[i]?.explanation || q.explanation}</p>
                               <small>Source: {feedback[i]?.source || q.source}</small>
                               {(feedback[i]?.evidence || q.evidence) ? (
@@ -2497,9 +2547,9 @@ export default function Rescue() {
                               concept.
                             </p>
                             {[
+                              "Tell me about this chapter.",
                               "Explain the key ideas in simpler terms.",
                               "What should I focus on in these notes?",
-                              "Help me remember the main concepts.",
                             ].map((q) => (
                               <button key={q} onClick={() => setQuestion(q)}>
                                 {q}
@@ -2517,7 +2567,7 @@ export default function Rescue() {
                           </div>
                         ))}
                         {busy && (
-                          <p className="muted">Working through your notes…</p>
+                          <p className="muted">Looking through your material…</p>
                         )}
                       </div>
                       <form className="chat-form" onSubmit={ask}>
@@ -2559,9 +2609,13 @@ export default function Rescue() {
                           <option value="scenario">Scenario practice</option>
                         </select>
                       </label>
+                      {materialLinks(resourceId)}
                       <p>
                         My material uses your selected notes and cites their
-                        pages. Expanded learning and scenario practice also
+                        pages. A broad question such as “Tell me about this
+                        chapter” summarizes the retrieved pages. If nothing in
+                        your material matches, RESCUE says so and answers as
+                        general study guidance. Expanded learning and scenario practice also
                         search NREMT, EMS.gov, and the American Heart Association
                         using the topic name only. Your notes are not included in
                         that search. Don’t include patient information.
@@ -2665,12 +2719,20 @@ export default function Rescue() {
                         </div>
                       ))}
                       {!!weakTopics(progress.attempts).length && (
-                        <p>
-                          Recommended review:{" "}
-                          {weakTopics(progress.attempts)
-                            .map((topic) => topic.topic)
-                            .join(", ")}
-                        </p>
+                        <div className="study-links">
+                          {weakTopics(progress.attempts).map((topic) => (
+                            <button
+                              type="button"
+                              key={topic.topic}
+                              onClick={() => {
+                                setQuizTopic(topic.topic);
+                                go("Practice quizzes");
+                              }}
+                            >
+                              Review {topic.topic} · {topic.accuracy}%
+                            </button>
+                          ))}
+                        </div>
                       )}
                     </section>
                     <section className="panel">

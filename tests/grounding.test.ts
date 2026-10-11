@@ -88,6 +88,36 @@ test("new generation requires evidence for flashcards as well as questions", () 
   input.cards = input.cards.map((c) => ({ ...c, evidence: undefined }));
   assert.equal(groundedStudySchema.safeParse(input).success, false);
 });
+test("a quiz explanation must cover the answer and a repeat is rejected", () => {
+  const input = draft();
+  input.questions = input.questions.map((question) => ({
+    ...question,
+    explanation:
+      "The correct choice matches the notes. The other choices describe billing, insurance, or a later step that this passage does not assign to this assessment.",
+  }));
+  assert.doesNotThrow(() =>
+    validateGroundedStudy(input, source, { mode: "quiz", style: "mixed" }),
+  );
+  input.questions[0] = { ...input.questions[0], explanation: "Too short." };
+  assert.throws(
+    () => validateGroundedStudy(input, source, { mode: "quiz", style: "mixed" }),
+    /why the answer is correct/,
+  );
+  input.questions[0] = {
+    ...demoSet.questions[0],
+    explanation:
+      "The correct choice matches the notes. The other choices describe billing, insurance, or a later step that this passage does not assign to this assessment.",
+  };
+  assert.throws(
+    () =>
+      validateGroundedStudy(input, source, {
+        mode: "quiz",
+        style: "mixed",
+        avoid: [demoSet.questions[0].question],
+      }),
+    /repeated a question/,
+  );
+});
 test("rejects duplicate options even when the supporting text matches", () => {
   const input = draft();
   input.questions = input.questions.map((q, i) =>

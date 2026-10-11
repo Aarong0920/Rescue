@@ -26,6 +26,7 @@ export type GenerationRequest = {
   difficulty?: "basic" | "intermediate" | "advanced";
   count?: number;
   topic?: string;
+  avoid?: string[];
 };
 
 export function generationInstructionsFor(request: GenerationRequest = {}) {
@@ -50,11 +51,19 @@ ${topic}`;
       : style === "scenarios"
         ? "Every question must be a realistic EMT scenario that applies a principle explicitly stated in the source."
         : "Mix terminology/comprehension and scenario questions as evenly as possible, with counts differing by at most one.";
+  const avoided = (request.avoid ?? [])
+    .map((question) => question.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  const repeats = avoided.length
+    ? `Do not repeat these existing questions:\n${avoided.map((question) => `- ${question}`).join("\n")}`
+    : "Do not repeat the same question wording.";
   if (mode === "quiz") {
     return `Create exactly ${count} multiple-choice questions and an empty cards array using ONLY the selected source text.
 ${mix}
 Difficulty: ${request.difficulty ?? "intermediate"}. Basic checks a stated definition. Intermediate checks understanding. Advanced applies a stated idea to a short fictional situation. Invent only the situation, never clinical findings, doses, thresholds, diagnoses, or procedures that the source does not state.
-Each correct answer AND explanation must be directly supported by its evidence passage. Distractors must be clearly incorrect, with only one supported answer. Paraphrase questions and answers.
+Each question has four distinct choices and one clearly correct answer. In the explanation, say why the correct choice is correct and why each of the other three choices is wrong. Use only facts from the evidence passage.
+${repeats}
 For EVERY question, copy a short contiguous verbatim evidence passage (20–600 characters) from the supplied text. No ellipses, fabricated passages, or invented page numbers. Vary correct-answer positions.
 If the text cannot support the requested questions, return status insufficient_source with empty cards and questions. Never fill gaps using general AI knowledge. Otherwise return status ready.
 ${topic}`;
@@ -140,10 +149,21 @@ export function validateGroundedStudy(
       );
     }
   }
+  const avoided = new Set((request.avoid ?? []).map(normalize));
   for (const q of questions) {
     if (new Set(q.options.map(normalize)).size !== 4) {
       throw new Error(
         "The quiz contained duplicate answer options. Please try again.",
+      );
+    }
+    if (avoided.has(normalize(q.question))) {
+      throw new Error(
+        "The quiz repeated a question you already have. Please try again.",
+      );
+    }
+    if (mode === "quiz" && normalize(q.explanation).length < 80) {
+      throw new Error(
+        "A quiz explanation did not cover why the answer is correct and why the other choices are wrong. Please try again.",
       );
     }
   }

@@ -21,6 +21,7 @@ export const requestSchema = z.object({
     )
     .max(4)
     .optional(),
+  avoid: z.array(z.string().trim().min(1).max(180)).max(12).optional(),
 });
 export const cardSchema = z.object({
   front: z.string(),
