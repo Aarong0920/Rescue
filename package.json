@@ -12,11 +12,14 @@
   "dependencies": {
     "@napi-rs/canvas": "^1.0.11",
     "@supabase/supabase-js": "^2.57.4",
+    "@tailwindcss/postcss": "^4.3.3",
     "lucide-react": "^0.468.0",
     "next": "^16.0.0",
     "openai": "^6.0.0",
+    "postcss": "^8.5.29",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "tailwindcss": "^4.3.3",
     "tesseract.js": "^7.0.0",
     "unpdf": "^1.8.1",
     "zod": "^4.1.0"

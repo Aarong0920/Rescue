@@ -38,6 +38,9 @@ import { prepareStudyImage } from "@/lib/photo-file";
 import { supabase } from "@/lib/supabase";
 import { demoResources, demoSet, initialProgress } from "@/lib/demo";
 import { initials } from "@/lib/profile";
+import { LandingPage } from "@/components/design/landing";
+import { WorkspaceFrame } from "@/components/design/frame";
+import { LiveDashboard } from "@/components/design/dashboard";
 import type { Page } from "@/lib/pages";
 import {
   chapterStage,
@@ -184,11 +187,6 @@ export default function Rescue() {
   const shownIndex = orderedCards[cardIndex] ?? 0;
   const shownCard = current?.cards[shownIndex];
   const accountEmail = profile.email || session?.user.email || "";
-  const named = [profile.firstName, profile.lastName]
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join(" ");
-  const accountName = demo ? "Demo student" : named || "Your account";
   const greeting = demo ? "future responder" : profile.firstName.trim();
   function notify(text: string, next: NoticeTone) {
     setStatus(text);
@@ -680,6 +678,17 @@ export default function Rescue() {
     pendingChapter.current = null;
     pushPlace(next, null);
     if (next === "Admin") void loadAdmin();
+  }
+  async function signOut() {
+    accessToken.current = null;
+    setSession(null);
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith("sb-") && key.includes("auth-token"))
+          localStorage.removeItem(key);
+      }
+    } catch {}
+    await supabase?.auth.signOut({ scope: "local" });
   }
   function openStudy(id: string, next: "Flashcards" | "Practice quizzes" | "AI tutor") {
     const match = progress.sets.find(
@@ -1407,6 +1416,46 @@ export default function Rescue() {
   const studyDays = new Set(progress.attempts.map((a) => a.date.slice(0, 10)))
     .size;
   const totalCards = progress.sets.reduce((n, s) => n + s.cards.length, 0);
+  const featured =
+    privateResources.find((resource) => chapterWork(resource)) ??
+    privateResources[0];
+  const featuredWork = featured ? chapterWork(featured) : null;
+  const featuredPercent = featuredWork
+    ? Math.round((featuredWork.done / featuredWork.total) * 100)
+    : null;
+  const week = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date();
+    day.setHours(12, 0, 0, 0);
+    day.setDate(day.getDate() - (6 - index));
+    const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+    const total = progress.attempts
+      .filter((attempt) => {
+        const parsed = new Date(attempt.date);
+        if (Number.isNaN(parsed.getTime())) return attempt.date.slice(0, 10) === key;
+        const attemptKey = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+        return attemptKey === key;
+      })
+      .reduce((sum, attempt) => sum + attempt.total, 0);
+    return {
+      label: day.toLocaleDateString(undefined, { weekday: "narrow" }),
+      total,
+    };
+  });
+  const recentActivity = [...progress.attempts]
+    .reverse()
+    .slice(0, 4)
+    .map((attempt) => ({
+      title: attempt.resourceTitle || attempt.topic || "Quiz",
+      detail: `${attempt.correct} of ${attempt.total} correct`,
+      when: new Date(attempt.date).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      }),
+      score: attempt.total
+        ? `${Math.round((attempt.correct / attempt.total) * 100)}%`
+        : "—",
+    }));
+  const weakest = weakTopics(progress.attempts)[0]?.topic ?? null;
   function resourceSelector() {
     return (
       <label className="field">
@@ -1471,167 +1520,41 @@ export default function Rescue() {
   }
   if (ready && !demo && !session)
     return (
-      <div className="auth-page">
-        <div className="auth-story">
-          <Brand />
-          <span className="eyebrow">BUILT FOR THE NEXT CALL</span>
-          <h1>
-            Confidence
-            <br />
-            starts <em>here.</em>
-          </h1>
-          <p>
-            Your notes. Your progress. Your next step toward becoming an EMT.
-          </p>
-          <div className="auth-pulse">
-            <Activity size={130} />
-          </div>
-        </div>
-        <div className="auth-panel">
+      <LandingPage
+        onDemo={() => {
+          setDemo(true);
+          void load(null, true);
+        }}
+        auth={
           <Auth
             onDemo={() => {
               setDemo(true);
               void load(null, true);
             }}
           />
-          <p className="footnote">Study smarter. Respond better.</p>
-        </div>
-      </div>
+        }
+      />
     );
   return (
-    <div className="app-shell">
-      <aside
-        id="workspace-navigation"
-        className={`sidebar ${mobile ? "open" : ""}`}
-      >
-        <Brand />
-        <button
-          className="icon-button mobile-close"
-          aria-label="Close navigation"
-          onClick={() => setMobile(false)}
-        >
-          <X size={20} />
-        </button>
-        <div className="workspace">
-          <span className="workspace-icon">
-            <GraduationCap size={20} />
-          </span>
-          <div>
-            EMT Academy<small>Your study workspace</small>
-          </div>
-          <span className="tiny-dot" />
-        </div>
-        <span className="nav-label">WORKSPACE</span>
-        <nav>
-          {nav.map((item) => (
-            <button
-              key={item.name}
-              className={page === item.name ? "active" : ""}
-              onClick={() => go(item.name)}
-            >
-              <item.icon size={19} />
-              {item.name}
-              {item.name === "AI tutor" && <span className="ai-tag">AI</span>}
-            </button>
-          ))}
-          {admin && (
-            <button
-              className={page === "Admin" ? "active" : ""}
-              onClick={() => go("Admin")}
-            >
-              <ShieldCheck size={19} />
-              Admin
-            </button>
-          )}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="purpose">
-            <Activity size={22} />
-            <strong>Built for the next call.</strong>
-            <p>
-              A little more prepared.
-              <br />
-              Every single day.
-            </p>
-          </div>
-          <div className="profile">
-            <span className="avatar">
-              {demo
-                ? "R"
-                : initials({
-                    firstName: profile.firstName,
-                    lastName: profile.lastName,
-                    email: accountEmail,
-                  })}
-            </span>
-            <div>
-              {accountName}
-              <small>{demo ? "Explore RESCUE" : accountEmail || "EMT student"}</small>
-            </div>
-            <button
-              className="icon-button"
-              title={demo ? "Sign in" : "Sign out"}
-              onClick={() => {
-                if (demo) {
-                  if (!supabase) {
-                    notify(
-                      "Add Supabase environment values to enable accounts.",
-                      "warning",
-                    );
-                    return;
-                  }
-                  setDemo(false);
-                  void load(null, false);
-                } else {
-                  accessToken.current = null;
-                  setSession(null);
-                  try {
-                    for (const key of Object.keys(localStorage)) {
-                      if (key.startsWith("sb-") && key.includes("auth-token"))
-                        localStorage.removeItem(key);
-                    }
-                  } catch {}
-                  void supabase!.auth.signOut({ scope: "local" });
-                }
-              }}
-            >
-              <LogOut size={17} />
-            </button>
-          </div>
-        </div>
-      </aside>
-      <div className="main-shell">
-        <header className="topbar">
-          <button
-            className="icon-button mobile-toggle"
-            aria-label="Toggle navigation"
-            aria-expanded={mobile}
-            aria-controls="workspace-navigation"
-            onClick={() => setMobile(!mobile)}
-          >
-            <Menu />
-          </button>
-          <div className="breadcrumb">
-            Workspace <span>/</span>
-            <strong>{page}</strong>
-          </div>
-          <div className="topbar-right">
-            <span className="connection">
-              <span className="tiny-dot" />
-              {demo ? "Demo workspace" : "Private workspace"}
-            </span>
-            <span className="avatar small">
-              {demo
-                ? "R"
-                : initials({
-                    firstName: profile.firstName,
-                    lastName: profile.lastName,
-                    email: accountEmail,
-                  })}
-            </span>
-          </div>
-        </header>
-        <main>
+    <WorkspaceFrame
+      page={page}
+      firstName={profile.firstName || "Student"}
+      lastName={profile.lastName || ""}
+      subtitle={demo ? "Explore RESCUE" : accountEmail || "EMT student"}
+      initials={initials(profile)}
+      admin={admin}
+      mobile={mobile}
+      setMobile={setMobile}
+      onNavigate={go}
+      onSignOut={() => {
+        if (demo) {
+          setDemo(false);
+          void load(null, false);
+          return;
+        }
+        void signOut();
+      }}
+    >
           <div className="demo-banner">
             {demo ? (
               <>
@@ -1679,247 +1602,81 @@ export default function Rescue() {
           ) : (
             <>
               {page === "Dashboard" && (
-                <>
-                  <div className="page-heading">
-                    <div>
-                      <div className="eyebrow">
-                        YOUR NEXT CHAPTER STARTS HERE
-                      </div>
-                      <h1>
-                        {greeting ? `Welcome back, ${greeting}` : "Welcome back"}
-                        <span className="red">.</span>
-                      </h1>
-                      <p>
-                        {greeting
-                          ? "Build your knowledge. Sharpen your instincts. Be ready."
-                          : "Add your name in Profile so RESCUE can greet you."}
-                      </p>
-                    </div>
-                    <button
-                      className="button primary"
-                      onClick={() => setUpload(true)}
-                    >
-                      <Plus size={17} />
-                      Add study material
-                    </button>
-                  </div>
-                  <div className="hero">
-                    <div className="hero-copy">
-                      <span className="pill">
-                        <span className="tiny-dot" /> ONE SESSION CLOSER
-                      </span>
-                      <h2>
-                        Study smarter.
-                        <br />
-                        Respond <em>better.</em>
-                      </h2>
-                      <p>
-                        Turn what you’re learning into what you know.
-                        <br />
-                        Your next focused study session starts here.
-                      </p>
-                      <button
-                        className="button light"
-                        onClick={() => go("Flashcards")}
-                      >
-                        Let’s get to work <ArrowRight size={17} />
-                      </button>
-                    </div>
-                    <div className="hero-art" aria-hidden="true">
-                      <div className="orbit one" />
-                      <div className="orbit two" />
-                      <div className="orbit three" />
-                      <div className="star-life">
-                        <Activity size={82} strokeWidth={1.5} />
-                      </div>
-                      <span className="art-label">
-                        KNOWLEDGE. CONFIDENCE. READINESS.
-                      </span>
-                      <svg className="ecg" viewBox="0 0 420 100">
-                        <path d="M0 52 H80 L98 40 L112 58 L137 52 H168 L183 70 L203 6 L225 94 L246 45 L262 52 H420" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="stats">
-                    <Stat
-                      icon={<Layers />}
-                      label="Cards mastered"
-                      value={String(progress.mastered.length)}
-                      detail={`${totalCards} cards in your study sets`}
-                    />
-                    <Stat
-                      icon={<Target />}
-                      label="Quiz accuracy"
-                      value={
-                        progress.attempts.length
-                          ? `${accuracy(progress.attempts)}%`
-                          : "—"
-                      }
-                      detail={
-                        progress.attempts.length
-                          ? "Across your completed quizzes"
-                          : "Take a quiz to establish a baseline"
-                      }
-                    />
-                    <Stat
-                      icon={<ClipboardCheck />}
-                      label="Quizzes completed"
-                      value={String(progress.attempts.length)}
-                      detail="Every attempt builds confidence"
-                    />
-                    <Stat
-                      icon={<Flame />}
-                      label="Active study days"
-                      value={String(studyDays)}
-                      detail="Days with a completed quiz"
-                    />
-                  </div>
-                  <div className="dashboard-grid">
-                    <section className="panel">
-                      <div className="section-heading">
-                        <div>
-                          <span className="eyebrow">KEEP YOUR MOMENTUM</span>
-                          <h2>Your next study session</h2>
-                        </div>
-                        <button
-                          className="text-button"
-                          onClick={() => go("My library")}
-                        >
-                          View library <ArrowRight size={15} />
-                        </button>
-                      </div>
-                      <div className="featured-study">
-                        <div className="topic-icon">
-                          <BookOpen size={26} />
-                        </div>
-                        <div>
-                          <span className="muted small-text">
-                            {current?.topic ?? "Your learning starts here"}
-                          </span>
-                          <h3>
-                            {current?.title ?? "Bring your notes to life"}
-                          </h3>
-                          <p>
-                            {current
-                              ? `${current.cards.length} flashcards · ${current.questions.length} practice questions`
-                              : "Upload your notes to create your first study set"}
-                          </p>
-                        </div>
-                        <button
-                          className="round-button"
-                          aria-label="Start study session"
-                          onClick={() =>
-                            current ? go("Flashcards") : setUpload(true)
-                          }
-                        >
-                          <ArrowRight size={20} />
-                        </button>
-                      </div>
-                      <div className="quick-actions">
-                        <button onClick={() => go("Flashcards")}>
-                          <Layers />
-                          <strong>Review flashcards</strong>
-                          <span>
-                            Make it stick <ArrowRight size={14} />
-                          </span>
-                        </button>
-                        <button onClick={() => go("Practice quizzes")}>
-                          <ClipboardCheck />
-                          <strong>Test your knowledge</strong>
-                          <span>
-                            Find your focus <ArrowRight size={14} />
-                          </span>
-                        </button>
-                        <button onClick={() => go("AI tutor")}>
-                          <Sparkles />
-                          <strong>Talk it through</strong>
-                          <span>
-                            Ask your AI tutor <ArrowRight size={14} />
-                          </span>
-                        </button>
-                      </div>
-                    </section>
-                    <section className="panel focus-panel">
-                      <div className="section-heading">
-                        <div>
-                          <span className="eyebrow">
-                            A LITTLE MORE PREPARED
-                          </span>
-                          <h2>Your focus areas</h2>
-                        </div>
-                        <Target size={20} />
-                      </div>
-                      {topics.slice(0, 4).map((t, i) => {
-                        const attempts = progress.attempts.filter(
-                          (a) => a.topic === t,
-                        );
-                        const value = accuracy(attempts);
-                        return (
-                          <div className="topic-progress" key={t}>
-                            <div>
-                              <span>{t}</span>
-                              <small>
-                                {attempts.length ? `${value}%` : "Not started"}
-                              </small>
-                            </div>
-                            <div className="track">
-                              <span
-                                style={{
-                                  width: `${value}%`,
-                                  background: i === 0 ? "#ef5d65" : undefined,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
-                      <button
-                        className="text-button"
-                        onClick={() => go("My progress")}
-                      >
-                        Explore your progress <ArrowRight size={15} />
-                      </button>
-                    </section>
-                  </div>
-                  <section className="panel class-preview">
-                    <div>
-                      <div className="class-icon">
-                        <Users size={25} />
-                      </div>
-                      <div>
-                        <span className="eyebrow">BETTER TOGETHER</span>
-                        <h2>Your class. A shared head start.</h2>
-                        <p>
-                          Original notes and approved resources, all in one
-                          place.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      className="button secondary"
-                      onClick={() => go("Class library")}
-                    >
-                      Explore class library <ArrowRight size={16} />
-                    </button>
-                  </section>
-                </>
+                <LiveDashboard
+                  firstName={greeting || "there"}
+                  onLibrary={() => go("My library")}
+                  onContinue={() => {
+                    if (featured) openResource(featured);
+                    else setUpload(true);
+                  }}
+                  continueTitle={featured?.title ?? "Add your first chapter"}
+                  continueDetail={
+                    featured
+                      ? featured.topic || "Private study material"
+                      : "Upload a chapter or photos to start a study set."
+                  }
+                  continuePercent={featuredPercent}
+                  continueNote={
+                    featuredWork
+                      ? `${featuredWork.done} of ${featuredWork.total} pages ready`
+                      : featured
+                        ? "Open this material to study, quiz, or make flashcards."
+                        : "Your library is empty."
+                  }
+                  metrics={[
+                    {
+                      label: "Study days",
+                      value: String(studyDays),
+                      detail: "Days with a completed quiz",
+                      accent: "coral",
+                    },
+                    {
+                      label: "Questions",
+                      value: String(questionsAnswered(progress.attempts)),
+                      detail: "Answered across your quizzes",
+                      accent: "blue",
+                    },
+                    {
+                      label: "Accuracy",
+                      value: progress.attempts.length
+                        ? `${accuracy(progress.attempts)}%`
+                        : "—",
+                      detail: progress.attempts.length
+                        ? "Across completed quizzes"
+                        : "Finish a quiz to see accuracy",
+                      accent: "mint",
+                    },
+                    {
+                      label: "Cards",
+                      value: String(progress.mastered.length),
+                      detail: `${totalCards} in your study sets`,
+                      accent: "violet",
+                    },
+                  ]}
+                  activity={recentActivity}
+                  week={week}
+                  weakTopic={weakest}
+                  onReviewWeak={() => {
+                    if (weakest) setQuizTopic(weakest);
+                    go("Practice quizzes");
+                  }}
+                  onProgress={() => go("My progress")}
+                />
               )}
               {(page === "My library" || page === "Class library") && (
                 <>
                   <Heading
                     eyebrow={
                       page === "My library"
-                        ? "YOUR PERSONAL KNOWLEDGE BASE"
+                        ? "YOUR STUDY MATERIALS"
                         : "LEARN TOGETHER"
                     }
                     title={
-                      page === "My library"
-                        ? "Make it your own."
-                        : "A shared head start."
+                      page === "My library" ? "My Library" : "Class library"
                     }
                     text={
                       page === "My library"
-                        ? "Private notes and files. Ready when you are."
+                        ? "Everything you need, organized in one place."
                         : "Original and authorized text resources, reviewed before sharing."
                     }
                     action={
@@ -2075,13 +1832,19 @@ export default function Rescue() {
               {(page === "Flashcards" || page === "Practice quizzes") && (
                 <>
                   <Heading
-                    eyebrow="FOCUSED PRACTICE"
-                    title={
+                    eyebrow={
                       page === "Flashcards"
-                        ? "A little more confident."
-                        : "Put your knowledge to work."
+                        ? "ACTIVE RECALL, MADE EASIER"
+                        : "BUILD EXAM CONFIDENCE"
                     }
-                    text="Practice terminology and real-world scenarios from your selected text or private chapter. AI-generated items need your review."
+                    title={
+                      page === "Flashcards" ? "Flashcards" : "Practice tests"
+                    }
+                    text={
+                      page === "Flashcards"
+                        ? "Turn your chapters into cards you can flip, mark, and revisit."
+                        : "Challenge what you know. Learn from every answer."
+                    }
                   />
                   <div className="study-toolbar">
                     {setSelector()}
@@ -2529,7 +2292,7 @@ export default function Rescue() {
                 <>
                   <Heading
                     eyebrow="YOUR STUDY PARTNER"
-                    title="Let’s work through it."
+                    title="Ask RESCUE"
                     text="Choose My material, Expanded learning, or Scenario practice. Expanded answers keep your notes separate from retrieved public sources."
                   />
                   <div className="tutor-layout">
@@ -2635,9 +2398,9 @@ export default function Rescue() {
               {page === "My progress" && (
                 <>
                   <Heading
-                    eyebrow="EVERY SESSION COUNTS"
-                    title="See how far you’ve come."
-                    text="Your own study history, strengths, and areas to revisit."
+                    eyebrow="YOUR GROWTH, AT A GLANCE"
+                    title="Progress"
+                    text="Consistency today builds confidence in the field."
                   />
                   <div className="stats">
                     <Stat
@@ -2762,8 +2525,8 @@ export default function Rescue() {
               {page === "Profile" && (
                 <>
                   <Heading
-                    eyebrow="YOUR ACCOUNT"
-                    title={accountName}
+                    eyebrow="MAKE RESCUE YOURS"
+                    title="Settings"
                     text={
                       demo
                         ? "Your name is visible only on your account. Private chapters stay private."
@@ -3089,25 +2852,17 @@ export default function Rescue() {
               )}
             </>
           )}
-          <footer>
-            <span>
-              <Activity size={14} /> RESCUE{" "}
-              <span className="muted">Study smarter. Respond better.</span>
-            </span>
-            <span
-              className={
-                saveState.startsWith("Saved")
-                  ? "save-ok"
-                  : saveState === "Not saved" || saveState.startsWith("Not saved")
-                    ? "save-bad"
-                    : ""
-              }
-            >
-              {saveState || "For education. Not for patient care."}
-            </span>
-          </footer>
-        </main>
-      </div>
+          <p
+            className={
+              saveState.startsWith("Saved")
+                ? "save-ok"
+                : saveState === "Not saved" || saveState.startsWith("Not saved")
+                  ? "save-bad"
+                  : "muted"
+            }
+          >
+            {saveState || "For education. Not for patient care."}
+          </p>
       {upload && (
         <Modal
           title="Add study material"
@@ -3532,7 +3287,7 @@ export default function Rescue() {
             )}
         </Modal>
       )}
-    </div>
+    </WorkspaceFrame>
   );
 }
 function Brand() {

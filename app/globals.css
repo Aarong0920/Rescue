@@ -1,13 +1,16 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;600;650;700;750;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
 :root {
-  --bg: #0b101c;
-  --panel: #111827;
-  --border: #242d3d;
-  --muted: #919caf;
-  --text: #eef0f5;
-  --red: #f45d65;
-  --sidebar: #0d1320;
-  --green: #73c3ab;
+  --bg: #0b1220;
+  --panel: #111d2c;
+  --border: #26364a;
+  --muted: #91a0b4;
+  --text: #edf2f7;
+  --red: #f15b66;
+  --sidebar: #0e1827;
+  --green: #53b995;
   color-scheme: dark;
 }
 * {
@@ -18,9 +21,11 @@ body {
   background: var(--bg);
   color: var(--text);
   font:
-    14px "DM Sans",
-    system-ui,
+    14px Inter,
+    "Avenir Next",
+    "Segoe UI",
     sans-serif;
+  letter-spacing: -0.012em;
 }
 button,
 input,
@@ -61,7 +66,7 @@ h1,
 h2,
 h3,
 .brand {
-  font-family: "Manrope", system-ui, sans-serif;
+  font-family: Inter, "Avenir Next", "Segoe UI", sans-serif;
 }
 h1,
 h2,
@@ -131,7 +136,7 @@ small {
   box-shadow: 0 3px 14px #ed465012;
 }
 .secondary {
-  background: #161e2d;
+  background: #192537;
   border-color: #303a4c;
 }
 .light {
@@ -175,7 +180,7 @@ small {
   min-height: 100vh;
 }
 .sidebar {
-  width: 232px;
+  width: 250px;
   background: var(--sidebar);
   border-right: 1px solid var(--border);
   position: fixed;
@@ -355,8 +360,8 @@ nav button.active:before {
   height: 30px;
 }
 .main-shell {
-  margin-left: 232px;
-  width: calc(100% - 232px);
+  margin-left: 250px;
+  width: calc(100% - 250px);
 }
 .topbar {
   height: 76px;
@@ -620,7 +625,7 @@ main {
   background: var(--panel);
   border: 1px solid var(--border);
   padding: 23px;
-  border-radius: 11px;
+  border-radius: 16px;
   margin-bottom: 22px;
 }
 .dashboard-grid {
@@ -955,9 +960,10 @@ textarea {
 }
 .resource-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  grid-template-columns: 1fr;
+  gap: 0;
   margin-bottom: 35px;
+  border-top: 1px solid var(--border);
 }
 .resource-card {
   border: 1px solid var(--border);
@@ -1061,12 +1067,13 @@ textarea {
 }
 .flashcard {
   width: 100%;
-  min-height: 320px;
-  border: 1px solid #46415a;
-  border-radius: 17px;
+  min-height: 360px;
+  border: 1px solid #34465b;
+  border-radius: 24px;
   background:
-    radial-gradient(ellipse at 90% 20%, #58344140, transparent 70%), #182031;
+    radial-gradient(ellipse at 50% 40%, #f15b6610, transparent 55%), #142235;
   padding: 45px 55px;
+  box-shadow: 0 26px 72px -38px rgb(0 0 0 / 80%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1564,7 +1571,7 @@ summary {
     margin-bottom: 22px;
   }
   .resource-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
   .page-heading h1 {
     font-size: 27px;
